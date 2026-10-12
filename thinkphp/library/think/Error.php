@@ -31,7 +31,8 @@ class Error
      */
     public static function register()
     {
-        error_reporting(E_ALL);
+        // PHP 8.1+ 下 ArrayAccess 等返回类型告警为 E_DEPRECATED，不能转成异常，否则框架无法启动
+        error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
         set_error_handler([__CLASS__, 'appError']);
         set_exception_handler([__CLASS__, 'appException']);
         register_shutdown_function([__CLASS__, 'appShutdown']);
@@ -68,6 +69,11 @@ class Error
      */
     public static function appError($errno, $errstr, $errfile = '', $errline = 0)
     {
+        // 忽略 PHP 8.x 弃用通知，避免 ThinkPHP 5.1 在加载阶段直接 Fatal
+        if ($errno === E_DEPRECATED || $errno === E_USER_DEPRECATED) {
+            return false;
+        }
+
         $exception = new ErrorException($errno, $errstr, $errfile, $errline);
         if (error_reporting() & $errno) {
             // 将错误信息托管至 think\exception\ErrorException

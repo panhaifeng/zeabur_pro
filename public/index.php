@@ -12,6 +12,9 @@
 // [ 应用入口文件 ]
 namespace think;
 
+// 兼容 PHP 8.1+（ThinkPHP 5.1 的 ArrayAccess 签名告警）
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+
 // 加载基础文件
 require __DIR__ . '/../thinkphp/base.php';
 

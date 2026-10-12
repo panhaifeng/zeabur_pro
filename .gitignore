@@ -6,12 +6,14 @@
 .env
 .env.*
 
-# Composer 依赖（若本地重新 composer install）
+# Composer 依赖
 /vendor/
 
 # IDE / 编辑器
 .idea/
 .vscode/
+.HBuilderX/
+.hbuilderx/
 *.sublime-project
 *.sublime-workspace
 *.swp
@@ -29,7 +31,7 @@ desktop.ini
 *.temp
 *.cache
 
-# 上传目录（若后续有用户上传文件）
+# 上传目录
 /public/uploads/
 /public/storage/
 
@@ -37,3 +39,7 @@ desktop.ini
 /phpunit.xml
 /tests/coverage/
 .phpunit.result.cache
+
+# 本地压缩包/临时目录
+*.zip
+/tp_tmp/

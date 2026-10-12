@@ -12,16 +12,18 @@
 return [
     // 数据库类型
     'type'            => 'mysql',
-    // 服务器地址
-    'hostname'        => '127.0.0.1',
+    // 服务器地址（本地默认 127.0.0.1；Zeabur 会注入 MYSQL_HOST 等变量）
+    'hostname'        => getenv('MYSQL_HOST') ?: '127.0.0.1',
     // 数据库名
-    'database'        => 'zeabur_pro',
+    'database'        => getenv('MYSQL_DATABASE') ?: 'zeabur_pro',
     // 用户名
-    'username'        => 'root',
+    'username'        => getenv('MYSQL_USERNAME') ?: (getenv('MYSQL_USER') ?: 'root'),
     // 密码
-    'password'        => 'root',
+    'password'        => getenv('MYSQL_PASSWORD') !== false && getenv('MYSQL_PASSWORD') !== ''
+        ? getenv('MYSQL_PASSWORD')
+        : 'root',
     // 端口
-    'hostport'        => '',
+    'hostport'        => getenv('MYSQL_PORT') ?: '',
     // 连接dsn
     'dsn'             => '',
     // 数据库连接参数

@@ -1,0 +1,49 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading">编辑用户</div>
+    <div class="panel-body">
+        <form id="userForm" class="form-horizontal" style="max-width:560px;">
+            <input type="hidden" name="id" value="{$info.id}">
+            <div class="form-group">
+                <label class="col-sm-3 control-label">用户名</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="username" value="{$info.username}"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">密码</label>
+                <div class="col-sm-9"><input type="password" class="form-control" name="password" placeholder="不修改请留空"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">昵称</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="nickname" value="{$info.nickname}"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">状态</label>
+                <div class="col-sm-9">
+                    <select class="form-control" name="status">
+                        <option value="1" {if $info.status == 1}selected{/if}>正常</option>
+                        <option value="0" {if $info.status == 0}selected{/if}>禁用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="{:url('admin/user/index')}" class="btn btn-default">返回</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{/block}
+{block name="script"}
+<script>
+$('#userForm').on('submit', function (e) {
+    e.preventDefault();
+    $.post("{:url('admin/user/edit', ['id'=>$info.id])}", $(this).serialize(), function (res) {
+        alert(res.msg);
+        if (res.code === 1) location.href = res.url;
+    }, 'json');
+});
+</script>
+{/block}

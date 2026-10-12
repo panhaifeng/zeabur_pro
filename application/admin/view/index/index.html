@@ -1,0 +1,11 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading">控制台</div>
+    <div class="panel-body">
+        <p>欢迎使用后台管理系统。</p>
+        <p>当前用户数：<strong>{$userCount}</strong></p>
+        <p>系统公告：{$notice|default='暂无'}</p>
+    </div>
+</div>
+{/block}

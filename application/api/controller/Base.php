@@ -41,7 +41,7 @@ class Base extends Controller
     {
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, token, Authorization, X-Requested-With, anonymous_id');
+        header('Access-Control-Allow-Headers: Content-Type, token, Authorization, X-Requested-With, anonymous_id, anonymous-id');
     }
 
     protected function getToken()
@@ -61,9 +61,22 @@ class Base extends Controller
 
     protected function getAnonymousId()
     {
-        $aid = request()->header('anonymous_id', '');
+        // 多种来源：部分网关会丢弃带下划线的 Header，所以也读参数
+        $aid = request()->header('anonymous-id', '');
+        if ($aid === '') {
+            $aid = request()->header('anonymous_id', '');
+        }
+        if ($aid === '' && !empty($_SERVER['HTTP_ANONYMOUS_ID'])) {
+            $aid = $_SERVER['HTTP_ANONYMOUS_ID'];
+        }
         if ($aid === '') {
             $aid = input('anonymous_id', '');
+        }
+        if ($aid === '') {
+            $aid = input('get.anonymous_id', '');
+        }
+        if ($aid === '') {
+            $aid = input('post.anonymous_id', '');
         }
         return trim($aid);
     }

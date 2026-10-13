@@ -3,6 +3,8 @@
 
 Route::get('api/user/get-info', 'api/user/getInfo');
 Route::post('api/user/wx-login', 'api/user/wxLogin');
+Route::post('api/user/update-profile', 'api/user/updateProfile');
+Route::post('api/user/upload-avatar', 'api/user/uploadAvatar');
 Route::get('api/user/error-word', 'api/user/errorWord');
 Route::post('api/user/remove-word', 'api/user/removeWord');
 Route::get('api/user/record-list', 'api/user/recordList');

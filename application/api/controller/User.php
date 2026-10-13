@@ -112,6 +112,79 @@ class User extends Base
     }
 
     /**
+     * 更新昵称/头像（个人小程序需用户主动填写，无法静默拉取）
+     * POST /api/user/update-profile  nickname, avatar
+     */
+    public function updateProfile()
+    {
+        $this->requireLogin();
+        if (empty($this->user['openid'])) {
+            $this->jsonOut(1, '请先微信登录');
+        }
+
+        $nickname = trim(input('nickname', ''));
+        $avatar = trim(input('avatar', ''));
+
+        $update = array();
+        if ($nickname !== '') {
+            // 微信昵称长度限制
+            if (mb_strlen($nickname, 'UTF-8') > 32) {
+                $nickname = mb_substr($nickname, 0, 32, 'UTF-8');
+            }
+            $update['nickname'] = $nickname;
+        }
+        if ($avatar !== '') {
+            $update['avatar'] = $avatar;
+        }
+        if (!$update) {
+            $this->jsonOut(1, '没有可更新的内容');
+        }
+
+        Db::name('user')->where('id', $this->user['id'])->update($update);
+        $user = Db::name('user')->where('id', $this->user['id'])->find();
+        $this->jsonOut(0, 'success', array(
+            'user' => $this->formatUser($user),
+        ));
+    }
+
+    /**
+     * 上传头像
+     * POST /api/user/upload-avatar  file
+     */
+    public function uploadAvatar()
+    {
+        $this->requireLogin();
+        if (empty($this->user['openid'])) {
+            $this->jsonOut(1, '请先微信登录');
+        }
+
+        $file = request()->file('file');
+        if (!$file) {
+            $this->jsonOut(1, '请选择头像文件');
+        }
+
+        $savePath = ROOT_PATH . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatar';
+        if (!is_dir($savePath)) {
+            @mkdir($savePath, 0777, true);
+        }
+
+        $info = $file->validate(array('size' => 2 * 1024 * 1024, 'ext' => 'jpg,jpeg,png,gif,webp'))
+            ->move($savePath);
+        if (!$info) {
+            $this->jsonOut(1, $file->getError() ? $file->getError() : '上传失败');
+        }
+
+        $url = '/uploads/avatar/' . str_replace('\\', '/', $info->getSaveName());
+        Db::name('user')->where('id', $this->user['id'])->update(array('avatar' => $url));
+        $user = Db::name('user')->where('id', $this->user['id'])->find();
+
+        $this->jsonOut(0, 'success', array(
+            'avatar' => $url,
+            'user'   => $this->formatUser($user),
+        ));
+    }
+
+    /**
      * 生词本
      * GET /api/user/error-word
      */

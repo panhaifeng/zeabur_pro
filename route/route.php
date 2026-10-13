@@ -1,20 +1,16 @@
 <?php
-// +----------------------------------------------------------------------
-// | ThinkPHP [ WE CAN DO IT JUST THINK ]
-// +----------------------------------------------------------------------
-// | Copyright (c) 2006~2018 http://thinkphp.cn All rights reserved.
-// +----------------------------------------------------------------------
-// | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
-// +----------------------------------------------------------------------
-// | Author: liu21st <liu21st@gmail.com>
-// +----------------------------------------------------------------------
+// 单词打地鼠 API 路由（兼容带连字符的路径）
 
-Route::get('think', function () {
-    return 'hello,ThinkPHP5!';
-});
+Route::get('api/user/get-info', 'api/user/getInfo');
+Route::post('api/user/wx-login', 'api/user/wxLogin');
+Route::get('api/user/error-word', 'api/user/errorWord');
+Route::post('api/user/remove-word', 'api/user/removeWord');
+Route::get('api/user/record-list', 'api/user/recordList');
+Route::get('api/user/badge', 'api/user/badge');
 
-Route::get('hello/:name', 'index/hello');
+Route::get('api/word/lib-list', 'api/word/libList');
 
-return [
+Route::post('api/game/start', 'api/game/start');
+Route::post('api/game/save-round', 'api/game/saveRound');
 
-];
+return [];

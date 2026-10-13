@@ -19,21 +19,21 @@ class Base extends Controller
 
         if ($this->needLogin) {
             $token = $this->getToken();
-            if ($token === '') {
-                $this->jsonOut(401, '请先登录');
+            $user = null;
+            if ($token !== '') {
+                $user = $this->userByToken($token);
             }
-            $user = $this->userByToken($token);
+            // 游客无 token 时，用 anonymous_id 自动建号（免登录直接玩）
             if (!$user) {
-                $this->jsonOut(401, '登录已失效，请重新登录');
+                $aid = $this->getAnonymousId();
+                if ($aid !== '') {
+                    $user = $this->ensureGuestByAnonymous($aid);
+                }
             }
-            if ((int)$user['status'] !== 1) {
-                $this->jsonOut(401, '账号已被禁用');
+            if (!$user) {
+                $this->jsonOut(401, '请先进入小程序');
             }
-            $this->user = [
-                'id'       => $user['id'],
-                'username' => $user['username'],
-                'nickname' => $user['nickname'],
-            ];
+            $this->user = $user;
         }
     }
 
@@ -41,7 +41,7 @@ class Base extends Controller
     {
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, token, Authorization, X-Requested-With');
+        header('Access-Control-Allow-Headers: Content-Type, token, Authorization, X-Requested-With, anonymous_id');
     }
 
     protected function getToken()
@@ -59,14 +59,25 @@ class Base extends Controller
         return trim($token);
     }
 
+    protected function getAnonymousId()
+    {
+        $aid = request()->header('anonymous_id', '');
+        if ($aid === '') {
+            $aid = input('anonymous_id', '');
+        }
+        return trim($aid);
+    }
+
     protected function makeToken($user)
     {
-        return md5($user['id'] . '|' . $user['username'] . '|' . $user['password'] . '|zeabur_pro');
+        $openid = isset($user['openid']) ? $user['openid'] : '';
+        $aid = isset($user['anonymous_id']) ? $user['anonymous_id'] : '';
+        return md5($user['id'] . '|' . $openid . '|' . $aid . '|word_mole');
     }
 
     protected function userByToken($token)
     {
-        $list = Db::name('user_db')->where('status', 1)->select();
+        $list = Db::name('user')->limit(5000)->select();
         foreach ($list as $user) {
             if ($this->makeToken($user) === $token) {
                 return $user;
@@ -75,12 +86,45 @@ class Base extends Controller
         return null;
     }
 
+    protected function ensureGuestByAnonymous($anonymousId)
+    {
+        if ($anonymousId === '') {
+            return null;
+        }
+        $user = Db::name('user')->where('anonymous_id', $anonymousId)->find();
+        if ($user) {
+            return $user;
+        }
+        $id = Db::name('user')->insertGetId(array(
+            'openid'       => null,
+            'anonymous_id' => $anonymousId,
+            'nickname'     => '游客',
+            'avatar'       => '',
+            'create_time'  => date('Y-m-d H:i:s'),
+        ));
+        return Db::name('user')->where('id', $id)->find();
+    }
+
+    protected function formatUser($user)
+    {
+        return array(
+            'id'           => intval($user['id']),
+            'openid'       => $user['openid'],
+            'anonymous_id' => $user['anonymous_id'],
+            'nickname'     => $user['nickname'] ? $user['nickname'] : '游客',
+            'avatar'       => $user['avatar'] ? $user['avatar'] : '',
+            'is_guest'     => empty($user['openid']) ? 1 : 0,
+            'token'        => $this->makeToken($user),
+        );
+    }
+
     protected function jsonOut($code, $msg, $data = null)
     {
-        $payload = ['code' => $code, 'msg' => $msg];
+        $payload = array('code' => $code, 'msg' => $msg);
         if ($data !== null) {
             $payload['data'] = $data;
         }
+        header('Content-Type: application/json; charset=utf-8');
         exit(json_encode($payload, JSON_UNESCAPED_UNICODE));
     }
 }

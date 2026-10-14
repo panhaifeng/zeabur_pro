@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `anonymous_id` varchar(64) DEFAULT NULL COMMENT '游客ID',
   `nickname` varchar(50) DEFAULT NULL,
   `avatar` varchar(255) DEFAULT NULL,
+  `avatar_bin` mediumblob COMMENT '头像二进制',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_openid` (`openid`),

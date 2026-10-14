@@ -149,9 +149,8 @@ class User extends Base
 
     /**
      * 上传头像
-     * POST /api/user/upload-avatar
-     * 优先 avatar_base64（小程序普通请求，不依赖 uploadFile 域名）
-     * 兼容 file  multipart
+     * POST /api/user/upload-avatar  file
+     * 优先落库 avatar_bin（不依赖容器磁盘持久化），并返回可展示的绝对地址
      */
     public function uploadAvatar()
     {
@@ -160,92 +159,210 @@ class User extends Base
             $this->jsonOut(1, '请先微信登录');
         }
 
-        $base64 = trim((string)input('avatar_base64', ''));
-        if ($base64 === '') {
-            $base64 = trim((string)input('post.avatar_base64', ''));
+        $parsed = $this->readUploadAvatarBinary();
+        if (is_string($parsed)) {
+            $this->jsonOut(1, $parsed);
         }
-        // JSON body 兜底（小程序用 application/json 提交）
-        if ($base64 === '') {
-            $raw = file_get_contents('php://input');
-            if ($raw) {
-                $json = json_decode($raw, true);
-                if (is_array($json) && !empty($json['avatar_base64'])) {
-                    $base64 = trim((string)$json['avatar_base64']);
-                }
-            }
-        }
+        $binary = $parsed['binary'];
+        $ext = $parsed['ext'];
+        $mime = $parsed['mime'];
 
-        $binary = '';
-        $ext = 'jpg';
+        $this->ensureAvatarBinColumn();
 
-        if ($base64 !== '') {
-            if (preg_match('/^data:image\/(\w+);base64,/i', $base64, $m)) {
-                $extName = strtolower($m[1]);
-                if ($extName === 'jpeg') {
-                    $ext = 'jpg';
-                } elseif (in_array($extName, array('jpg', 'png', 'gif', 'webp'), true)) {
-                    $ext = $extName;
-                }
-                $base64 = substr($base64, strpos($base64, ',') + 1);
-            }
-            $base64 = preg_replace('/\s+/', '', $base64);
-            $binary = base64_decode($base64, true);
-            if ($binary === false || strlen($binary) < 32) {
-                $this->jsonOut(1, '头像数据无效');
-            }
-            if (strlen($binary) > 2 * 1024 * 1024) {
-                $this->jsonOut(1, '头像不能超过2MB');
-            }
-        } else {
-            $file = request()->file('file');
-            if (!$file) {
-                $this->jsonOut(1, '请选择头像文件');
-            }
-            $size = intval($file->getSize());
-            if ($size <= 0) {
-                $this->jsonOut(1, '头像文件无效');
-            }
-            if ($size > 2 * 1024 * 1024) {
-                $this->jsonOut(1, '头像不能超过2MB');
-            }
-            $mime = strtolower((string)$file->getMime());
-            $extMap = array(
-                'image/jpeg' => 'jpg',
-                'image/jpg'  => 'jpg',
-                'image/png'  => 'png',
-                'image/gif'  => 'gif',
-                'image/webp' => 'webp',
+        $uid = intval($this->user['id']);
+        $url = '/api/user/avatar-img?id=' . $uid . '&v=' . time();
+
+        // 优先写入数据库，避免 Zeabur 容器磁盘不可写/重启丢失
+        $dbOk = false;
+        try {
+            Db::execute(
+                'UPDATE `user` SET `avatar` = ?, `avatar_bin` = ? WHERE `id` = ?',
+                array($url, $binary, $uid)
             );
-            $ext = isset($extMap[$mime]) ? $extMap[$mime] : 'jpg';
-            $tmp = $file->getRealPath();
-            if (!$tmp) {
-                $tmp = $file->getPathname();
-            }
-            if (!$tmp || !is_file($tmp)) {
-                $this->jsonOut(1, '头像临时文件不存在');
-            }
-            $binary = @file_get_contents($tmp);
-            if ($binary === false || strlen($binary) < 32) {
-                $this->jsonOut(1, '读取头像失败');
-            }
+            $dbOk = true;
+        } catch (\Exception $e) {
+            $dbOk = false;
         }
 
-        $url = $this->saveAvatarBinary($binary, $ext);
-        if ($url === '') {
-            $this->jsonOut(1, '头像保存失败，请检查服务器写入权限');
+        // 磁盘备份（失败不影响主流程）
+        $diskUrl = $this->saveAvatarBinary($binary, $ext);
+        if (!$dbOk) {
+            if ($diskUrl === '') {
+                $this->jsonOut(1, '头像保存失败：数据库与磁盘均不可写');
+            }
+            Db::name('user')->where('id', $uid)->update(array('avatar' => $diskUrl));
+            $url = $diskUrl;
         }
 
-        Db::name('user')->where('id', $this->user['id'])->update(array('avatar' => $url));
-        $user = Db::name('user')->where('id', $this->user['id'])->find();
-
+        $user = Db::name('user')->where('id', $uid)->find();
         $this->jsonOut(0, 'success', array(
-            'avatar' => $url,
+            'avatar' => $this->formatAvatarUrl($url),
+            'mime'   => $mime,
             'user'   => $this->formatUser($user),
         ));
     }
 
     /**
-     * 将头像二进制写入 public/uploads/avatar
+     * 输出头像图片（公开）
+     * GET /api/user/avatar-img?id=1
+     */
+    public function avatarImg()
+    {
+        $id = intval(input('id', 0));
+        if ($id <= 0) {
+            http_response_code(404);
+            exit('not found');
+        }
+
+        $this->ensureAvatarBinColumn();
+        $row = null;
+        try {
+            $row = Db::query('SELECT `avatar`, `avatar_bin` FROM `user` WHERE `id` = ? LIMIT 1', array($id));
+            $row = $row ? $row[0] : null;
+        } catch (\Exception $e) {
+            $row = Db::name('user')->where('id', $id)->field('avatar')->find();
+        }
+
+        if (!$row) {
+            http_response_code(404);
+            exit('not found');
+        }
+
+        $bin = '';
+        if (!empty($row['avatar_bin'])) {
+            $bin = $row['avatar_bin'];
+        } elseif (!empty($row['avatar']) && strpos($row['avatar'], '/uploads/') === 0) {
+            $path = ROOT_PATH . 'public' . str_replace('/', DIRECTORY_SEPARATOR, $row['avatar']);
+            if (is_file($path)) {
+                $bin = @file_get_contents($path);
+            }
+        }
+
+        if ($bin === '' || $bin === false) {
+            http_response_code(404);
+            exit('not found');
+        }
+
+        $mime = 'image/jpeg';
+        if (strncmp($bin, "\x89PNG", 4) === 0) {
+            $mime = 'image/png';
+        } elseif (strncmp($bin, 'GIF8', 4) === 0) {
+            $mime = 'image/gif';
+        } elseif (strncmp($bin, 'RIFF', 4) === 0) {
+            $mime = 'image/webp';
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Cache-Control: public, max-age=86400');
+        header('Content-Length: ' . strlen($bin));
+        echo $bin;
+        exit;
+    }
+
+    /**
+     * 读取上传头像二进制：优先 $_FILES（兼容微信 uploadFile）
+     * @return array|string  array{binary,ext,mime} 或错误文案
+     */
+    protected function readUploadAvatarBinary()
+    {
+        $binary = '';
+        $ext = 'jpg';
+        $mime = 'image/jpeg';
+
+        if (!empty($_FILES['file']) && is_array($_FILES['file'])) {
+            $f = $_FILES['file'];
+            if (!empty($f['error']) && intval($f['error']) !== UPLOAD_ERR_OK) {
+                return '头像上传失败，错误码 ' . intval($f['error']);
+            }
+            $tmp = isset($f['tmp_name']) ? $f['tmp_name'] : '';
+            if ($tmp === '' || !is_file($tmp)) {
+                return '头像临时文件不存在';
+            }
+            $size = isset($f['size']) ? intval($f['size']) : filesize($tmp);
+            if ($size <= 0) {
+                return '头像文件无效';
+            }
+            if ($size > 2 * 1024 * 1024) {
+                return '头像不能超过2MB';
+            }
+            $binary = @file_get_contents($tmp);
+            if ($binary === false || strlen($binary) < 32) {
+                return '读取头像失败';
+            }
+            if (!empty($f['type'])) {
+                $mime = strtolower((string)$f['type']);
+            }
+            $name = isset($f['name']) ? strtolower((string)$f['name']) : '';
+            if (preg_match('/\.(jpe?g|png|gif|webp)$/', $name, $m)) {
+                $ext = ($m[1] === 'jpeg') ? 'jpg' : $m[1];
+            }
+        } else {
+            $file = request()->file('file');
+            if (!$file) {
+                return '请选择头像文件';
+            }
+            $size = intval($file->getSize());
+            if ($size <= 0) {
+                return '头像文件无效';
+            }
+            if ($size > 2 * 1024 * 1024) {
+                return '头像不能超过2MB';
+            }
+            $mime = strtolower((string)$file->getMime());
+            $tmp = $file->getRealPath();
+            if (!$tmp) {
+                $tmp = $file->getPathname();
+            }
+            if (!$tmp || !is_file($tmp)) {
+                return '头像临时文件不存在';
+            }
+            $binary = @file_get_contents($tmp);
+            if ($binary === false || strlen($binary) < 32) {
+                return '读取头像失败';
+            }
+        }
+
+        $extMap = array(
+            'image/jpeg' => 'jpg',
+            'image/jpg'  => 'jpg',
+            'image/png'  => 'png',
+            'image/gif'  => 'gif',
+            'image/webp' => 'webp',
+        );
+        if (isset($extMap[$mime])) {
+            $ext = $extMap[$mime];
+        }
+        if ($mime === '' || $mime === 'application/octet-stream') {
+            $mime = ($ext === 'png') ? 'image/png' : 'image/jpeg';
+        }
+
+        return array(
+            'binary' => $binary,
+            'ext'    => $ext,
+            'mime'   => $mime,
+        );
+    }
+
+    protected function ensureAvatarBinColumn()
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
+        try {
+            Db::query('SELECT `avatar_bin` FROM `user` LIMIT 1');
+        } catch (\Exception $e) {
+            try {
+                Db::execute('ALTER TABLE `user` ADD COLUMN `avatar_bin` MEDIUMBLOB NULL COMMENT \'头像二进制\' AFTER `avatar`');
+            } catch (\Exception $e2) {
+                // ignore
+            }
+        }
+    }
+
+    /**
+     * 将头像二进制写入 public/uploads/avatar（备份）
      */
     protected function saveAvatarBinary($binary, $ext = 'jpg')
     {

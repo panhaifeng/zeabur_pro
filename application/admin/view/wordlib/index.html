@@ -1,0 +1,57 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading clearfix">
+        <span class="pull-left">词库管理</span>
+        <a class="btn btn-primary btn-xs pull-right" href="{:url('admin/wordlib/add')}">新增词库</a>
+    </div>
+    <div class="panel-body">
+        <form class="form-inline" method="get" action="{:url('admin/wordlib/index')}" style="margin-bottom:15px;">
+            <input type="text" class="form-control" name="keyword" value="{$keyword}" placeholder="词库名称/说明">
+            <button class="btn btn-default" type="submit">搜索</button>
+        </form>
+        <table class="table table-bordered table-hover">
+            <thead>
+            <tr>
+                <th width="60">ID</th>
+                <th>词库名称</th>
+                <th>说明</th>
+                <th width="90">单词数</th>
+                <th width="80">状态</th>
+                <th width="220">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            {volist name="list" id="vo"}
+            <tr>
+                <td>{$vo.id}</td>
+                <td>{$vo.lib_name}</td>
+                <td>{$vo.lib_desc}</td>
+                <td>{$counts[$vo.id]|default=0}</td>
+                <td>{if $vo.status == 1}<span class="label label-success">启用</span>{else/}<span class="label label-default">关闭</span>{/if}</td>
+                <td>
+                    <a class="btn btn-xs btn-success" href="{:url('admin/worditem/index', ['lib_id'=>$vo.id])}">单词列表</a>
+                    <a class="btn btn-xs btn-info" href="{:url('admin/wordlib/edit', ['id'=>$vo.id])}">编辑</a>
+                    <a class="btn btn-xs btn-danger btn-del" href="javascript:;" data-id="{$vo.id}">删除</a>
+                </td>
+            </tr>
+            {/volist}
+            </tbody>
+        </table>
+        <div>{$list}</div>
+        <p class="text-muted" style="margin-top:10px;">提示：小程序开局需该词库至少有 10 个单词；删除词库会同时删除其下全部单词。</p>
+    </div>
+</div>
+{/block}
+{block name="script"}
+<script>
+$('.btn-del').on('click', function () {
+    if (!confirm('确定删除该词库及其全部单词吗？')) return;
+    var id = $(this).data('id');
+    $.post("{:url('admin/wordlib/delete')}", {id: id}, function (res) {
+        alert(res.msg);
+        if (res.code === 1) location.reload();
+    }, 'json');
+});
+</script>
+{/block}

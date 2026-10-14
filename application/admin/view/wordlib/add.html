@@ -1,0 +1,44 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading">新增词库</div>
+    <div class="panel-body">
+        <form id="libForm" class="form-horizontal" style="max-width:560px;">
+            <div class="form-group">
+                <label class="col-sm-3 control-label">词库名称</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="lib_name" placeholder="如：初中词汇"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">说明</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="lib_desc" placeholder="可选"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">状态</label>
+                <div class="col-sm-9">
+                    <select class="form-control" name="status">
+                        <option value="1">启用</option>
+                        <option value="0">关闭</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="{:url('admin/wordlib/index')}" class="btn btn-default">返回</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{/block}
+{block name="script"}
+<script>
+$('#libForm').on('submit', function (e) {
+    e.preventDefault();
+    $.post("{:url('admin/wordlib/add')}", $(this).serialize(), function (res) {
+        alert(res.msg);
+        if (res.code === 1) location.href = res.url;
+    }, 'json');
+});
+</script>
+{/block}

@@ -125,10 +125,48 @@ class Base extends Controller
             'openid'       => $user['openid'],
             'anonymous_id' => $user['anonymous_id'],
             'nickname'     => $user['nickname'] ? $user['nickname'] : '游客',
-            'avatar'       => $user['avatar'] ? $user['avatar'] : '',
+            'avatar'       => $this->formatAvatarUrl(isset($user['avatar']) ? $user['avatar'] : ''),
             'is_guest'     => empty($user['openid']) ? 1 : 0,
             'token'        => $this->makeToken($user),
         );
+    }
+
+    /**
+     * 头像转成绝对地址，兼容未改前端拼接域名的页面
+     */
+    protected function formatAvatarUrl($avatar)
+    {
+        $avatar = trim((string)$avatar);
+        if ($avatar === '') {
+            return '';
+        }
+        if (stripos($avatar, 'http://') === 0 || stripos($avatar, 'https://') === 0) {
+            return $avatar;
+        }
+        if ($avatar[0] !== '/') {
+            $avatar = '/' . $avatar;
+        }
+
+        $host = '';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $host = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
+        } elseif (!empty($_SERVER['HTTP_HOST'])) {
+            $host = $_SERVER['HTTP_HOST'];
+        }
+        if ($host === '') {
+            return $avatar;
+        }
+
+        $proto = 'https';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $proto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        } elseif (!empty($_SERVER['REQUEST_SCHEME'])) {
+            $proto = strtolower($_SERVER['REQUEST_SCHEME']);
+        } elseif (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+            $proto = 'https';
+        }
+
+        return $proto . '://' . $host . $avatar;
     }
 
     protected function jsonOut($code, $msg, $data = null)

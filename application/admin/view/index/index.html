@@ -1,11 +1,32 @@
 {extend name="public/layout" /}
 {block name="content"}
-<div class="panel panel-default">
+<div class="stat-grid">
+    <div class="stat-card accent">
+        <span class="label">词库数量</span>
+        <div class="value">{$libCount}</div>
+    </div>
+    <div class="stat-card">
+        <span class="label">单词总量</span>
+        <div class="value">{$wordCount}</div>
+    </div>
+    <div class="stat-card">
+        <span class="label">后台用户</span>
+        <div class="value">{$userCount}</div>
+    </div>
+    <div class="stat-card">
+        <span class="label">对局记录</span>
+        <div class="value">{$recordCount}</div>
+    </div>
+</div>
+
+<div class="panel panel-default welcome-card">
     <div class="panel-heading">控制台</div>
     <div class="panel-body">
-        <p>欢迎使用后台管理系统。</p>
-        <p>当前用户数：<strong>{$userCount}</strong></p>
-        <p>系统公告：{$notice|default='暂无'}</p>
+        <p class="lead">欢迎回来，从左侧进入词库与单词管理，即可自定义小程序题库。</p>
+        <p style="margin:0;color:#6b7f93;font-size:13px;">建议每个启用词库至少维护 10 个单词，保证开局抽题正常。</p>
+        {if condition="$notice"}
+        <div class="notice-box">系统公告：{$notice}</div>
+        {/if}
     </div>
 </div>
 {/block}

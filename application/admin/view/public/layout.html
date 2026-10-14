@@ -3,38 +3,384 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{$siteName|default='后台管理系统'}</title>
+    <title>{$siteName|default='单词打地鼠后台'}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
     <style>
-        body { background: #f5f7fb; }
-        .sidebar { min-height: 100vh; background: #2f3b52; color: #fff; padding: 0; }
-        .sidebar .brand { padding: 18px 16px; font-size: 18px; font-weight: bold; background: #263247; }
-        .sidebar a { display: block; color: #cfd8e6; padding: 12px 18px; text-decoration: none; }
-        .sidebar a:hover, .sidebar a.active { background: #1f8ceb; color: #fff; }
-        .topbar { background: #fff; border-bottom: 1px solid #e5e9f2; padding: 12px 20px; margin-bottom: 20px; }
-        .panel { box-shadow: 0 1px 3px rgba(0,0,0,.05); }
-        .content-wrap { padding: 0 20px 20px; }
+        :root {
+            --ink: #142536;
+            --muted: #6b7f93;
+            --line: #e4ebf2;
+            --bg: #eef3f7;
+            --card: #ffffff;
+            --accent: #0e8f7a;
+            --accent-deep: #0a6b5c;
+            --accent-soft: rgba(14, 143, 122, .12);
+            --sidebar: #102433;
+            --danger: #d64545;
+            --ok: #1f9d6a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+                radial-gradient(900px 420px at 0% 0%, rgba(14, 143, 122, .08), transparent 55%),
+                var(--bg);
+            font-family: "Noto Sans SC", "DM Sans", sans-serif;
+            color: var(--ink);
+        }
+        a { color: var(--accent); }
+        a:hover { color: var(--accent-deep); text-decoration: none; }
+
+        .admin-shell {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 232px;
+            flex: 0 0 232px;
+            background:
+                radial-gradient(420px 260px at 20% 0%, rgba(25, 184, 154, .22), transparent 60%),
+                linear-gradient(180deg, #123045 0%, var(--sidebar) 100%);
+            color: #dff3ee;
+            padding: 0 0 24px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .sidebar .brand {
+            padding: 22px 20px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            margin-bottom: 12px;
+        }
+        .brand-mark {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #19b89a, #0e8f7a);
+            font-family: "DM Sans", sans-serif;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(14, 143, 122, .35);
+        }
+        .brand-text { line-height: 1.25; }
+        .brand-text strong {
+            display: block;
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .brand-text span {
+            font-size: 12px;
+            color: rgba(223, 243, 238, .65);
+        }
+        .nav-label {
+            padding: 10px 20px 6px;
+            font-size: 11px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: rgba(223, 243, 238, .42);
+        }
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 2px 12px;
+            padding: 11px 14px;
+            border-radius: 12px;
+            color: rgba(223, 243, 238, .78);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background .2s, color .2s, transform .15s;
+        }
+        .sidebar a:hover {
+            background: rgba(255,255,255,.06);
+            color: #fff;
+        }
+        .sidebar a.active {
+            background: linear-gradient(135deg, rgba(25, 184, 154, .95), rgba(14, 143, 122, .92));
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(14, 143, 122, .28);
+        }
+        .nav-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: .55;
+        }
+        .sidebar a.active .nav-dot { opacity: 1; background: #fff; }
+
+        .main {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .topbar {
+            background: rgba(255,255,255,.86);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--line);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .topbar-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink);
+        }
+        .topbar-meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px 6px 6px;
+            border-radius: 999px;
+            background: #f3f7fa;
+            border: 1px solid var(--line);
+        }
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #19b89a, #0e8f7a);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .logout-link {
+            color: var(--muted);
+            text-decoration: none;
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .logout-link:hover {
+            background: #f3f7fa;
+            color: var(--danger);
+        }
+
+        .content-wrap {
+            padding: 24px 28px 36px;
+            animation: pageIn .45s ease both;
+        }
+        @keyframes pageIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Bootstrap overrides */
+        .panel {
+            border: 0;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(20, 37, 54, .06);
+            background: var(--card);
+            overflow: hidden;
+        }
+        .panel-default > .panel-heading {
+            background: transparent;
+            border-bottom: 1px solid var(--line);
+            padding: 16px 20px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--ink);
+            border-radius: 0;
+        }
+        .panel-body { padding: 20px; }
+        .table {
+            margin-bottom: 12px;
+            background: #fff;
+        }
+        .table > thead > tr > th {
+            border-bottom: 1px solid var(--line);
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 12px;
+            background: #f8fbfc;
+        }
+        .table > tbody > tr > td {
+            border-top: 1px solid #eef3f7;
+            vertical-align: middle;
+        }
+        .table-hover > tbody > tr:hover > td {
+            background: #f5fbf9;
+        }
+        .form-control {
+            height: 40px;
+            border-radius: 10px;
+            border-color: #d7e1ea;
+            box-shadow: none !important;
+        }
+        .form-control:focus {
+            border-color: rgba(14, 143, 122, .55);
+            box-shadow: 0 0 0 3px rgba(14, 143, 122, .12) !important;
+        }
+        .btn {
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+            border-color: transparent;
+            box-shadow: 0 8px 16px rgba(14, 143, 122, .22);
+        }
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+            background: var(--accent-deep);
+            border-color: transparent;
+        }
+        .btn-info {
+            background: #2f7fd1;
+            border-color: transparent;
+        }
+        .btn-success {
+            background: var(--ok);
+            border-color: transparent;
+        }
+        .btn-danger {
+            background: var(--danger);
+            border-color: transparent;
+        }
+        .btn-default {
+            background: #f3f7fa;
+            border-color: var(--line);
+            color: var(--ink);
+        }
+        .label-success { background: var(--ok); }
+        .label-default { background: #9aafc0; }
+        .pagination > li > a,
+        .pagination > li > span {
+            border-radius: 8px !important;
+            margin: 0 2px;
+            border-color: var(--line);
+            color: var(--ink);
+        }
+        .pagination > .active > a,
+        .pagination > .active > span {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .form-inline .form-control { margin-right: 8px; }
+        .text-muted { color: var(--muted) !important; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 18px 18px 16px;
+            box-shadow: 0 10px 28px rgba(20, 37, 54, .06);
+            border: 1px solid rgba(255,255,255,.8);
+        }
+        .stat-card .label {
+            display: block;
+            background: none;
+            padding: 0;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-family: "DM Sans", sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--ink);
+            line-height: 1.1;
+        }
+        .stat-card.accent {
+            background: linear-gradient(145deg, #12a68d, #0c7463);
+            color: #fff;
+            box-shadow: 0 14px 30px rgba(14, 143, 122, .28);
+        }
+        .stat-card.accent .label,
+        .stat-card.accent .value { color: #fff; }
+        .welcome-card .lead {
+            font-size: 15px;
+            color: var(--muted);
+            margin: 0 0 8px;
+        }
+        .notice-box {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: var(--accent-soft);
+            color: var(--accent-deep);
+            font-size: 13px;
+        }
+
+        @media (max-width: 900px) {
+            .admin-shell { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .sidebar a { display: inline-flex; margin: 4px; }
+            .nav-label { display: none; }
+            .content-wrap { padding: 16px; }
+        }
     </style>
 </head>
 <body>
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-sm-2 sidebar">
-            <div class="brand">{$siteName|default='后台管理系统'}</div>
-            <a href="{:url('admin/index/index')}" class="{$menu=='index'?'active':''}">首页</a>
-            <a href="{:url('admin/wordlib/index')}" class="{$menu=='wordlib'?'active':''}">词库管理</a>
-            <a href="{:url('admin/worditem/index')}" class="{$menu=='worditem'?'active':''}">单词管理</a>
-            <a href="{:url('admin/user/index')}" class="{$menu=='user'?'active':''}">用户管理</a>
-            <a href="{:url('admin/config/index')}" class="{$menu=='config'?'active':''}">系统配置</a>
+<div class="admin-shell">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">WM</div>
+            <div class="brand-text">
+                <strong>{$siteName|default='单词打地鼠'}</strong>
+                <span>Admin Console</span>
+            </div>
         </div>
-        <div class="col-sm-10">
-            <div class="topbar clearfix">
-                <div class="pull-left">欢迎，{if condition="$adminUser.nickname"}{$adminUser.nickname}{else/}{$adminUser.username}{/if}</div>
-                <div class="pull-right"><a href="{:url('admin/login/logout')}">退出登录</a></div>
+        <div class="nav-label">菜单</div>
+        <a href="{:url('admin/index/index')}" class="{$menu=='index'?'active':''}"><span class="nav-dot"></span>首页</a>
+        <a href="{:url('admin/wordlib/index')}" class="{$menu=='wordlib'?'active':''}"><span class="nav-dot"></span>词库管理</a>
+        <a href="{:url('admin/worditem/index')}" class="{$menu=='worditem'?'active':''}"><span class="nav-dot"></span>单词管理</a>
+        <a href="{:url('admin/user/index')}" class="{$menu=='user'?'active':''}"><span class="nav-dot"></span>用户管理</a>
+        <a href="{:url('admin/config/index')}" class="{$menu=='config'?'active':''}"><span class="nav-dot"></span>系统配置</a>
+    </aside>
+    <div class="main">
+        <div class="topbar">
+            <div class="topbar-title">管理后台</div>
+            <div class="topbar-meta">
+                <div class="user-chip">
+                    <span class="user-avatar">{$adminAvatar}</span>
+                    <span>{$adminDisplayName}</span>
+                </div>
+                <a class="logout-link" href="{:url('admin/login/logout')}">退出</a>
             </div>
-            <div class="content-wrap">
-                {block name="content"}{/block}
-            </div>
+        </div>
+        <div class="content-wrap">
+            {block name="content"}{/block}
         </div>
     </div>
 </div>

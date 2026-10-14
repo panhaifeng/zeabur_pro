@@ -4,40 +4,356 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>后台登录</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { background: linear-gradient(135deg, #3a7bd5, #3a6073); min-height: 100vh; }
-        .login-box { width: 380px; margin: 10% auto; background: #fff; border-radius: 6px; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
-        .login-box h3 { margin-top: 0; margin-bottom: 24px; text-align: center; }
-        .tip { color: #999; font-size: 12px; margin-top: 12px; text-align: center; }
+        :root {
+            --ink: #12263a;
+            --muted: #6b7c8f;
+            --line: rgba(18, 38, 58, .12);
+            --accent: #0e8f7a;
+            --accent-deep: #0a6b5c;
+            --danger: #d64545;
+            --ok: #1f9d6a;
+            --card: rgba(255, 255, 255, .92);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Noto Sans SC", "DM Sans", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(1200px 600px at 10% -10%, rgba(14, 143, 122, .35), transparent 55%),
+                radial-gradient(900px 500px at 100% 20%, rgba(34, 88, 140, .28), transparent 50%),
+                linear-gradient(160deg, #0f2438 0%, #16384d 45%, #0d2a36 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+            background-size: 48px 48px;
+            mask-image: radial-gradient(circle at center, #000 30%, transparent 80%);
+            pointer-events: none;
+        }
+        .shell {
+            width: 100%;
+            max-width: 420px;
+            position: relative;
+            z-index: 1;
+            animation: rise .55s ease both;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .brand {
+            text-align: center;
+            margin-bottom: 22px;
+            color: #e8f4f1;
+        }
+        .brand-mark {
+            display: inline-flex;
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #19b89a, #0e8f7a);
+            box-shadow: 0 10px 30px rgba(14, 143, 122, .35);
+            font-family: "DM Sans", sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            color: #fff;
+            letter-spacing: .5px;
+            margin-bottom: 14px;
+        }
+        .brand h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: .5px;
+        }
+        .brand p {
+            margin: 0;
+            color: rgba(232, 244, 241, .72);
+            font-size: 14px;
+        }
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 32px 28px 26px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
+            border: 1px solid rgba(255,255,255,.55);
+        }
+        .field { margin-bottom: 16px; }
+        .field label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-bottom: 7px;
+        }
+        .field input {
+            width: 100%;
+            height: 46px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 0 14px;
+            font-size: 15px;
+            color: var(--ink);
+            background: #f7fafc;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s, background .2s;
+        }
+        .field input:focus {
+            background: #fff;
+            border-color: rgba(14, 143, 122, .55);
+            box-shadow: 0 0 0 4px rgba(14, 143, 122, .12);
+        }
+        .field input.is-error {
+            border-color: rgba(214, 69, 69, .7);
+            background: #fff7f7;
+            animation: shake .38s ease;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+        .btn {
+            width: 100%;
+            height: 48px;
+            margin-top: 8px;
+            border: 0;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: .5px;
+            cursor: pointer;
+            transition: transform .15s, box-shadow .2s, opacity .2s;
+            box-shadow: 0 10px 22px rgba(14, 143, 122, .28);
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 28px rgba(14, 143, 122, .35);
+        }
+        .btn:disabled {
+            opacity: .72;
+            cursor: wait;
+        }
+        .btn .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,.35);
+            border-top-color: #fff;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: -3px;
+            animation: spin .7s linear infinite;
+        }
+        .btn.is-loading .spinner { display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tip {
+            margin-top: 16px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .toast-wrap {
+            position: fixed;
+            top: 36px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99;
+            width: min(92vw, 360px);
+            pointer-events: none;
+        }
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            opacity: 0;
+            transform: translateY(-18px) scale(.96);
+            transition:
+                opacity .7s cubic-bezier(.22, 1, .36, 1),
+                transform .7s cubic-bezier(.22, 1, .36, 1),
+                box-shadow .7s ease;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .toast.hide {
+            opacity: 0;
+            transform: translateY(-10px) scale(.98);
+            transition:
+                opacity .85s ease,
+                transform .85s ease;
+        }
+        .toast.ok {
+            background: linear-gradient(135deg, rgba(232, 250, 242, .92), rgba(214, 242, 230, .88));
+            border: 1px solid rgba(31, 157, 106, .18);
+            box-shadow: 0 18px 48px rgba(14, 100, 70, .16);
+        }
+        .toast.err {
+            background: linear-gradient(135deg, rgba(255, 245, 245, .95), rgba(255, 232, 232, .9));
+            border: 1px solid rgba(214, 69, 69, .18);
+            box-shadow: 0 18px 48px rgba(140, 40, 40, .14);
+        }
+        .toast-icon {
+            flex: 0 0 32px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .toast.ok .toast-icon {
+            background: linear-gradient(145deg, #3ecf95, #1f9d6a);
+            box-shadow: 0 6px 16px rgba(31, 157, 106, .28);
+        }
+        .toast.err .toast-icon {
+            background: linear-gradient(145deg, #ef6b6b, #d64545);
+        }
+        .toast-body { flex: 1; min-width: 0; }
+        .toast-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 3px;
+            letter-spacing: .2px;
+        }
+        .toast.ok .toast-title { color: #167a52; }
+        .toast.err .toast-title { color: #c03939; }
+        .toast-msg {
+            font-size: 13px;
+            color: #5f7388;
+            line-height: 1.5;
+        }
+        .shell.is-success {
+            transition: opacity 1s ease, transform 1s ease, filter 1s ease;
+            opacity: .42;
+            transform: scale(.985);
+            filter: blur(.4px);
+        }
     </style>
 </head>
 <body>
-<div class="login-box">
-    <h3>后台管理系统</h3>
-    <form id="loginForm">
-        <div class="form-group">
-            <label>账号</label>
-            <input type="text" class="form-control" name="username" placeholder="请输入账号" value="admin">
-        </div>
-        <div class="form-group">
-            <label>密码</label>
-            <input type="password" class="form-control" name="password" placeholder="请输入密码" value="123456">
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">登录</button>
-        <div class="tip">默认账号 admin / 123456</div>
-    </form>
+<div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+<div class="shell">
+    <div class="brand">
+        <div class="brand-mark">WM</div>
+        <h1>单词打地鼠</h1>
+        <p>管理后台登录</p>
+    </div>
+    <div class="card">
+        <form id="loginForm" autocomplete="on">
+            <div class="field">
+                <label for="username">账号</label>
+                <input id="username" type="text" name="username" value="admin" placeholder="请输入账号">
+            </div>
+            <div class="field">
+                <label for="password">密码</label>
+                <input id="password" type="password" name="password" value="123456" placeholder="请输入密码">
+            </div>
+            <button type="submit" class="btn" id="loginBtn">
+                <span class="spinner"></span><span class="btn-text">登录</span>
+            </button>
+            <div class="tip">默认账号 admin / 123456</div>
+        </form>
+    </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/jquery@1.12.4/dist/jquery.min.js"></script>
 <script>
+var toastTimer = null;
+
+function showToast(type, title, msg, holdMs) {
+    var wrap = document.getElementById('toastWrap');
+    var icon = type === 'ok' ? '✓' : '!';
+    wrap.innerHTML =
+        '<div class="toast ' + type + '">' +
+            '<div class="toast-icon">' + icon + '</div>' +
+            '<div class="toast-body">' +
+                '<div class="toast-title">' + title + '</div>' +
+                '<div class="toast-msg">' + msg + '</div>' +
+            '</div>' +
+        '</div>';
+    var el = wrap.firstChild;
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () { el.classList.add('show'); });
+    });
+    clearTimeout(toastTimer);
+    var stay = holdMs || (type === 'ok' ? 1800 : 2800);
+    toastTimer = setTimeout(function () {
+        el.classList.add('hide');
+        el.classList.remove('show');
+    }, stay);
+}
+
+function setLoading(on) {
+    var btn = $('#loginBtn');
+    btn.toggleClass('is-loading', on).prop('disabled', on);
+    btn.find('.btn-text').text(on ? '登录中…' : '登录');
+}
+
+function markError() {
+    $('#username, #password').addClass('is-error');
+    setTimeout(function () {
+        $('#username, #password').removeClass('is-error');
+    }, 450);
+}
+
 $('#loginForm').on('submit', function (e) {
     e.preventDefault();
-    $.post("{:url('admin/login/doLogin')}", $(this).serialize(), function (res) {
-        alert(res.msg);
-        if (res.code === 1) {
-            location.href = res.url;
-        }
-    }, 'json');
+    var username = $.trim($('#username').val());
+    var password = $.trim($('#password').val());
+    if (!username || !password) {
+        showToast('err', '登录失败', '请输入账号和密码');
+        markError();
+        return;
+    }
+    setLoading(true);
+    $.post("{:url('admin/login/doLogin')}", $(this).serialize())
+        .done(function (res) {
+            if (res.code === 1) {
+                $('.shell').addClass('is-success');
+                showToast('ok', '登录成功', '欢迎回来，即将进入后台…', 2200);
+                setTimeout(function () {
+                    location.href = res.url;
+                }, 2000);
+            } else {
+                setLoading(false);
+                showToast('err', '登录失败', res.msg || '账号或密码错误');
+                markError();
+            }
+        })
+        .fail(function () {
+            setLoading(false);
+            showToast('err', '网络异常', '请检查网络后重试');
+        });
 });
 </script>
 </body>

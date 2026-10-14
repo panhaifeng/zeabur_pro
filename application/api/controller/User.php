@@ -150,6 +150,7 @@ class User extends Base
     /**
      * 上传头像
      * POST /api/user/upload-avatar  file
+     * 说明：微信 chooseAvatar 临时文件常无扩展名，不能只靠 ext 校验
      */
     public function uploadAvatar()
     {
@@ -163,18 +164,66 @@ class User extends Base
             $this->jsonOut(1, '请选择头像文件');
         }
 
-        $savePath = ROOT_PATH . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatar';
-        if (!is_dir($savePath)) {
-            @mkdir($savePath, 0777, true);
+        $size = intval($file->getSize());
+        if ($size <= 0) {
+            $this->jsonOut(1, '头像文件无效');
+        }
+        if ($size > 2 * 1024 * 1024) {
+            $this->jsonOut(1, '头像不能超过2MB');
         }
 
-        $info = $file->validate(array('size' => 2 * 1024 * 1024, 'ext' => 'jpg,jpeg,png,gif,webp'))
-            ->move($savePath);
-        if (!$info) {
-            $this->jsonOut(1, $file->getError() ? $file->getError() : '上传失败');
+        $mime = strtolower((string)$file->getMime());
+        $extMap = array(
+            'image/jpeg' => 'jpg',
+            'image/jpg'  => 'jpg',
+            'image/png'  => 'png',
+            'image/gif'  => 'gif',
+            'image/webp' => 'webp',
+        );
+        $ext = isset($extMap[$mime]) ? $extMap[$mime] : '';
+        if ($ext === '') {
+            $orig = strtolower((string)$file->getInfo('name'));
+            if (preg_match('/\.(jpe?g|png|gif|webp)$/', $orig, $m)) {
+                $ext = ($m[1] === 'jpeg') ? 'jpg' : $m[1];
+            } else {
+                // 微信临时头像多为 jpeg，无后缀时按 jpg 保存
+                $ext = 'jpg';
+            }
         }
 
-        $url = '/uploads/avatar/' . str_replace('\\', '/', $info->getSaveName());
+        $baseDir = ROOT_PATH . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'avatar';
+        $subDir = date('Ymd');
+        $savePath = $baseDir . DIRECTORY_SEPARATOR . $subDir;
+        if (!is_dir($savePath) && !@mkdir($savePath, 0777, true)) {
+            $this->jsonOut(1, '头像目录创建失败');
+        }
+
+        $filename = 'av_' . date('His') . '_' . uniqid() . '.' . $ext;
+        $dest = $savePath . DIRECTORY_SEPARATOR . $filename;
+        $tmp = $file->getRealPath();
+        if (!$tmp) {
+            $tmp = $file->getPathname();
+        }
+
+        $moved = false;
+        try {
+            $info = $file->move($savePath, $filename, true);
+            if ($info) {
+                $moved = true;
+                $filename = $info->getFilename();
+            }
+        } catch (\Exception $e) {
+            $moved = false;
+        }
+
+        if (!$moved) {
+            if (!$tmp || !is_file($tmp) || !@copy($tmp, $dest)) {
+                $err = $file->getError();
+                $this->jsonOut(1, $err ? $err : '头像上传失败');
+            }
+        }
+
+        $url = '/uploads/avatar/' . $subDir . '/' . $filename;
         Db::name('user')->where('id', $this->user['id'])->update(array('avatar' => $url));
         $user = Db::name('user')->where('id', $this->user['id'])->find();
 

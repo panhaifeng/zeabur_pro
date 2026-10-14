@@ -22,9 +22,9 @@ RUN sed -ri -e "s!/var/www/html!${APACHE_DOCUMENT_ROOT}!g" /etc/apache2/sites-av
 WORKDIR /var/www/html
 COPY --chown=www-data:www-data . /var/www/html
 
-RUN mkdir -p runtime \
+RUN mkdir -p runtime public/uploads/avatar \
     && chown -R www-data:www-data runtime public \
-    && chmod -R 775 runtime
+    && chmod -R 775 runtime public/uploads
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

@@ -62,11 +62,33 @@ class Ai extends Controller
         }
 
         // 密钥与配置一律从环境变量 /.env 读取，不写死在代码里
-        $this->arkApiKey = (string)env('ark_api_key', '');
-        $this->arkApiUrl = (string)env('ark_api_url', 'https://ark.cn-beijing.volces.com/api/v3/chat/completions');
-        $this->arkModelId = (string)env('ark_model_id', 'doubao-seed-2-1-lite-260915');
-        $this->wxAppId = (string)env('wx_appid', '');
-        $this->wxAppSecret = (string)env('wx_secret', '');
+        // 兼容：TP env()、系统 getenv()、以及已有 config/wechat.php（仅 AppId/Secret）
+        $this->arkApiKey = $this->envVal('ARK_API_KEY', 'ark_api_key');
+        $this->arkApiUrl = $this->envVal('ARK_API_URL', 'ark_api_url', 'https://ark.cn-beijing.volces.com/api/v3/chat/completions');
+        $this->arkModelId = $this->envVal('ARK_MODEL_ID', 'ark_model_id', 'doubao-seed-2-1-lite-260915');
+        $this->wxAppId = $this->envVal('WX_APPID', 'wx_appid', (string)config('wechat.appid'));
+        $this->wxAppSecret = $this->envVal('WX_SECRET', 'wx_secret', (string)config('wechat.appsecret'));
+    }
+
+    /**
+     * 读取环境变量：优先 .env / Env，其次系统 getenv（兼容 Zeabur 不带 PHP_ 前缀）
+     */
+    private function envVal($sysKey, $tpKey, $default = '')
+    {
+        $v = env($tpKey, null);
+        if ($v !== null && $v !== '') {
+            return (string)$v;
+        }
+        $g = getenv($sysKey);
+        if ($g !== false && $g !== '') {
+            return (string)$g;
+        }
+        // Zeabur / 部分面板可能注入小写名
+        $g2 = getenv(strtolower($sysKey));
+        if ($g2 !== false && $g2 !== '') {
+            return (string)$g2;
+        }
+        return (string)$default;
     }
 
     /**
@@ -77,7 +99,27 @@ class Ai extends Controller
         if ($this->arkApiKey === '' || $this->arkModelId === '' || $this->arkApiUrl === '') {
             return array('ok' => false, 'code' => 401, 'msg' => '服务鉴权失败，请稍后再试');
         }
+        if ($this->wxAppId === '' || $this->wxAppSecret === '') {
+            return array('ok' => false, 'code' => 4001, 'msg' => '内容安全服务暂不可用，请稍后再试');
+        }
         return array('ok' => true, 'code' => 0, 'msg' => 'ok');
+    }
+
+    /**
+     * 写运行日志（不含密钥），方便排查微信/方舟调用失败
+     */
+    private function aiLog($msg)
+    {
+        try {
+            $line = date('Y-m-d H:i:s') . ' ' . $msg . PHP_EOL;
+            $dir = runtime_path() . 'log' . DIRECTORY_SEPARATOR;
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            @file_put_contents($dir . 'ai_' . date('Ym') . '.log', $line, FILE_APPEND);
+        } catch (\Exception $e) {
+            // 忽略日志失败
+        }
     }
 
     /**
@@ -378,6 +420,7 @@ class Ai extends Controller
         $resp = $this->httpPostJson($url, $payload, 8);
         $json = json_decode($resp, true);
         if (!is_array($json)) {
+            $this->aiLog('msg_sec_check invalid_json resp_len=' . strlen((string)$resp));
             return '内容安全校验失败，请稍后再试';
         }
 
@@ -396,19 +439,31 @@ class Ai extends Controller
         if ($errcode === 87014) {
             return '内容含有违规信息，请修改后重试';
         }
+        $errmsg = isset($json['errmsg']) ? $json['errmsg'] : '';
+        $this->aiLog('msg_sec_check fail errcode=' . $errcode . ' errmsg=' . $errmsg
+            . ' has_openid=' . ($openid !== '' ? '1' : '0'));
+
         // access_token 失效则清缓存并提示重试（不回传微信原始错误）
         if ($errcode === 40001 || $errcode === 42001) {
             Cache::rm('wx_access_token_ai');
             return '内容安全服务暂不可用，请稍后再试';
         }
+        // openid 无效时降级重试旧版接口（无 openid）
+        if ($openid !== '' && ($errcode === 40003 || $errcode === 61010 || $errcode === 43104)) {
+            return $this->checkMsgSec($content, '');
+        }
         return '内容安全校验失败，请稍后再试';
     }
 
     /**
-     * 获取并缓存微信 access_token（不写日志、不输出）
+     * 获取并缓存微信 access_token（密钥不写日志、不输出前端）
      */
     private function getWxAccessToken()
     {
+        if ($this->wxAppId === '' || $this->wxAppSecret === '') {
+            $this->aiLog('getWxAccessToken: WX_APPID/WX_SECRET empty');
+            return '';
+        }
         $cacheKey = 'wx_access_token_ai';
         $cached = Cache::get($cacheKey);
         if (is_string($cached) && $cached !== '') {
@@ -420,6 +475,12 @@ class Ai extends Controller
         $resp = $this->httpGet($url, 8);
         $json = json_decode($resp, true);
         if (!is_array($json) || empty($json['access_token'])) {
+            $errcode = is_array($json) && isset($json['errcode']) ? $json['errcode'] : 'na';
+            $errmsg = is_array($json) && isset($json['errmsg']) ? $json['errmsg'] : 'empty_or_invalid_json';
+            // 只记错误码/文案，不记 secret
+            $this->aiLog('getWxAccessToken fail errcode=' . $errcode . ' errmsg=' . $errmsg
+                . ' appid_suffix=' . substr($this->wxAppId, -6)
+                . ' resp_len=' . strlen((string)$resp));
             return '';
         }
         $token = $json['access_token'];

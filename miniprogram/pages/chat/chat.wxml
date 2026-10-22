@@ -1,0 +1,34 @@
+<view class="page">
+  <scroll-view
+    class="msg-list"
+    scroll-y
+    scroll-with-animation
+    scroll-into-view="{{scrollInto}}"
+  >
+    <view wx:if="{{!messages.length}}" class="empty-tip">跟我聊聊吧，有什么想问的～</view>
+    <block wx:for="{{messages}}" wx:key="index">
+      <view id="msg-{{index}}" class="msg-row {{item.role}}">
+        <view class="bubble">{{item.content}}</view>
+      </view>
+    </block>
+    <view id="msg-bottom" style="height:1px;"></view>
+  </scroll-view>
+
+  <view class="input-bar">
+    <input
+      class="input"
+      value="{{inputText}}"
+      disabled="{{sending}}"
+      confirm-type="send"
+      placeholder="输入消息..."
+      bindinput="onInput"
+      bindconfirm="onSend"
+    />
+    <button
+      class="send-btn"
+      loading="{{sending}}"
+      disabled="{{sending || !inputText}}"
+      bindtap="onSend"
+    >{{sending ? '发送中' : '发送'}}</button>
+  </view>
+</view>

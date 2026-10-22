@@ -1,0 +1,13 @@
+<IfModule mod_rewrite.c>
+  Options +FollowSymlinks -Multiviews
+  RewriteEngine On
+
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ index.php?s=$1 [QSA,PT,L]
+</IfModule>
+
+# AI SSE 流式输出：关闭 gzip，避免整包缓冲
+<IfModule mod_deflate.c>
+  SetEnvIf Request_URI streamChat no-gzip
+</IfModule>

@@ -1,0 +1,56 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading">新增单词</div>
+    <div class="panel-body">
+        <form id="wordForm" class="form-horizontal" style="max-width:640px;">
+            <div class="form-group">
+                <label class="col-sm-3 control-label">所属词库</label>
+                <div class="col-sm-9">
+                    <select class="form-control" name="lib_id">
+                        {volist name="libs" id="lib"}
+                        <option value="{$lib.id}" {if $lib_id == $lib.id}selected{/if}>{$lib.lib_name}</option>
+                        {/volist}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">英文单词</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="word" placeholder="如：apple"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">音标</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="phonetic" placeholder="选填，如：/ˈæpl/"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">正确释义</label>
+                <div class="col-sm-9"><input type="text" class="form-control" name="meaning" placeholder="如：苹果"></div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-3 control-label">干扰释义</label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" name="distract" placeholder="逗号分隔，如：香蕉,橙子,葡萄">
+                    <p class="help-block">建议填 3 个错误选项，游戏中会与正确释义一起打乱展示</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="{:url('admin/worditem/index', ['lib_id'=>$lib_id])}" class="btn btn-default">返回</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{/block}
+{block name="script"}
+<script>
+$('#wordForm').on('submit', function (e) {
+    e.preventDefault();
+    $.post("{:url('admin/worditem/add')}", $(this).serialize(), function (res) {
+        alert(res.msg);
+        if (res.code === 1) location.href = res.url;
+    }, 'json');
+});
+</script>
+{/block}

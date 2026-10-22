@@ -1,0 +1,61 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading clearfix">
+        <span class="pull-left">对局记录</span>
+    </div>
+    <div class="panel-body">
+        <form class="form-inline" method="get" action="{:url('admin/gamerecord/index')}" style="margin-bottom:15px;">
+            <input type="text" class="form-control" name="keyword" value="{$keyword}" placeholder="微信昵称">
+            <select class="form-control" name="lib_id">
+                <option value="0">全部词库</option>
+                {volist name="libs" id="lib"}
+                <option value="{$lib.id}" {if $lib_id == $lib.id}selected{/if}>{$lib.lib_name}</option>
+                {/volist}
+            </select>
+            <select class="form-control" name="difficult">
+                <option value="">全部难度</option>
+                <option value="简单" {if $difficult == '简单'}selected{/if}>简单</option>
+                <option value="普通" {if $difficult == '普通'}selected{/if}>普通</option>
+                <option value="困难" {if $difficult == '困难'}selected{/if}>困难</option>
+            </select>
+            <button class="btn btn-default" type="submit">搜索</button>
+        </form>
+        <table class="table table-bordered table-hover">
+            <thead>
+            <tr>
+                <th width="60">ID</th>
+                <th width="140">微信昵称</th>
+                <th width="80">用户类型</th>
+                <th width="120">词库</th>
+                <th width="80">难度</th>
+                <th width="80">得分</th>
+                <th width="100">正确/总数</th>
+                <th width="160">对局时间</th>
+            </tr>
+            </thead>
+            <tbody>
+            {volist name="list" id="vo"}
+            <tr>
+                <td>{$vo.id}</td>
+                <td>{$vo.nickname|default='未设置'}</td>
+                <td>
+                    {if $vo.openid}
+                    <span class="label label-success">微信</span>
+                    {else /}
+                    <span class="label label-default">游客</span>
+                    {/if}
+                </td>
+                <td>{$vo.lib_name|default='-'}</td>
+                <td>{$vo.difficult}</td>
+                <td>{$vo.score}</td>
+                <td>{$vo.right_count} / {$vo.total_count}</td>
+                <td>{$vo.create_time}</td>
+            </tr>
+            {/volist}
+            </tbody>
+        </table>
+        <div>{$list|raw}</div>
+    </div>
+</div>
+{/block}

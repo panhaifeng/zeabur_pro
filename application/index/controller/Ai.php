@@ -513,104 +513,152 @@ class Ai extends Controller
             'stream'   => true,
         ), JSON_UNESCAPED_UNICODE);
 
-        $buffer = '';
-        $httpCode = 0;
-        $curlErrno = 0;
-        $authFailed = false;
-        $upstreamErr = '';
+        $sslAttempts = array(
+            array('verify' => true, 'cacert' => $this->findCaBundle()),
+            array('verify' => true, 'cacert' => ''),
+            array('verify' => false, 'cacert' => ''),
+        );
 
-        $ch = curl_init($this->arkApiUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->arkApiKey,
-        ));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $this->requestTimeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use (&$buffer, &$authFailed, &$upstreamErr, $onDelta) {
-            $len = strlen($data);
-            $buffer .= $data;
+        $lastFail = array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
 
-            // 非 SSE 的错误 JSON 整包缓冲后解析
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = trim(substr($buffer, 0, $pos));
-                $buffer = substr($buffer, $pos + 1);
-                if ($line === '') {
-                    continue;
+        foreach ($sslAttempts as $ssl) {
+            $buffer = '';
+            $authFailed = false;
+            $upstreamErr = '';
+            $gotAnyDelta = false;
+            $rawHead = '';
+
+            $ch = curl_init($this->arkApiUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $this->arkApiKey,
+            ));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $this->requestTimeout);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            if ($ssl['verify']) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                if ($ssl['cacert'] !== '' && is_file($ssl['cacert'])) {
+                    curl_setopt($ch, CURLOPT_CAINFO, $ssl['cacert']);
                 }
-                // 兼容 data:xxx / data: xxx
-                if (stripos($line, 'data:') === 0) {
-                    $payload = trim(substr($line, 5));
-                    if ($payload === '[DONE]') {
-                        continue;
-                    }
-                    $json = json_decode($payload, true);
-                    if (!is_array($json)) {
-                        continue;
-                    }
-                    // 方舟错误结构
-                    if (isset($json['error'])) {
-                        $msg = isset($json['error']['message']) ? (string)$json['error']['message'] : '';
-                        $type = isset($json['error']['type']) ? (string)$json['error']['type'] : '';
-                        if (stripos($msg, 'auth') !== false || stripos($type, 'auth') !== false
-                            || stripos($msg, 'api key') !== false || stripos($msg, 'Unauthorized') !== false) {
-                            $authFailed = true;
-                        } else {
-                            $upstreamErr = '模型服务异常，请稍后再试';
-                        }
-                        continue;
-                    }
-                    $delta = '';
-                    if (isset($json['choices'][0]['delta']['content'])) {
-                        $delta = (string)$json['choices'][0]['delta']['content'];
-                    } elseif (isset($json['choices'][0]['message']['content'])) {
-                        $delta = (string)$json['choices'][0]['message']['content'];
-                    }
-                    if ($delta !== '' && is_callable($onDelta)) {
-                        call_user_func($onDelta, $delta);
-                    }
-                } else {
-                    // 可能是非流式错误 JSON 行
-                    $json = json_decode($line, true);
-                    if (is_array($json) && isset($json['error'])) {
-                        $msg = isset($json['error']['message']) ? (string)$json['error']['message'] : '';
-                        if (stripos($msg, 'api key') !== false || stripos($msg, 'Unauthorized') !== false
-                            || stripos($msg, 'auth') !== false) {
-                            $authFailed = true;
-                        } else {
-                            $upstreamErr = '模型服务异常，请稍后再试';
-                        }
-                    }
-                }
+            } else {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
             }
-            return $len;
-        });
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use (&$buffer, &$authFailed, &$upstreamErr, &$gotAnyDelta, &$rawHead, $onDelta) {
+                $len = strlen($data);
+                if (strlen($rawHead) < 500) {
+                    $rawHead .= $data;
+                }
+                $buffer .= $data;
 
-        $ok = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErrno = curl_errno($ch);
-        curl_close($ch);
+                while (($pos = strpos($buffer, "\n")) !== false) {
+                    $line = trim(substr($buffer, 0, $pos));
+                    $buffer = substr($buffer, $pos + 1);
+                    if ($line === '') {
+                        continue;
+                    }
+                    if (stripos($line, 'data:') === 0) {
+                        $payload = trim(substr($line, 5));
+                        if ($payload === '[DONE]') {
+                            continue;
+                        }
+                        $json = json_decode($payload, true);
+                        if (!is_array($json)) {
+                            continue;
+                        }
+                        if (isset($json['error'])) {
+                            $msg = isset($json['error']['message']) ? (string)$json['error']['message'] : '';
+                            $type = isset($json['error']['type']) ? (string)$json['error']['type'] : '';
+                            if (stripos($msg, 'auth') !== false || stripos($type, 'auth') !== false
+                                || stripos($msg, 'api key') !== false || stripos($msg, 'Unauthorized') !== false) {
+                                $authFailed = true;
+                            } else {
+                                $upstreamErr = '模型服务异常，请稍后再试';
+                                $this->aiLog('ark stream error_msg=' . mb_substr($msg, 0, 120));
+                            }
+                            continue;
+                        }
+                        // Seed 模型可能先推 reasoning_content，最终答复在 content
+                        $delta = '';
+                        if (isset($json['choices'][0]['delta']['content'])) {
+                            $delta = (string)$json['choices'][0]['delta']['content'];
+                        } elseif (isset($json['choices'][0]['message']['content'])) {
+                            $delta = (string)$json['choices'][0]['message']['content'];
+                        }
+                        if ($delta !== '' && is_callable($onDelta)) {
+                            $gotAnyDelta = true;
+                            call_user_func($onDelta, $delta);
+                        }
+                    } else {
+                        $json = json_decode($line, true);
+                        if (is_array($json) && isset($json['error'])) {
+                            $msg = isset($json['error']['message']) ? (string)$json['error']['message'] : '';
+                            if (stripos($msg, 'api key') !== false || stripos($msg, 'Unauthorized') !== false
+                                || stripos($msg, 'auth') !== false) {
+                                $authFailed = true;
+                            } else {
+                                $upstreamErr = '模型服务异常，请稍后再试';
+                                $this->aiLog('ark stream raw_error=' . mb_substr($msg, 0, 120));
+                            }
+                        }
+                    }
+                }
+                return $len;
+            });
 
-        if ($curlErrno === 28) {
-            return array('ok' => false, 'code' => 4002, 'msg' => '请求超时，请稍后再试');
+            $ok = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErrno = curl_errno($ch);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            // SSL/网络失败则换下一档证书策略重试
+            if ($ok === false && $curlErrno !== 0 && $curlErrno !== 28 && $httpCode === 0) {
+                $this->aiLog('ark stream retry ssl curl_errno=' . $curlErrno . ' err=' . $curlError);
+                $lastFail = array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
+                continue;
+            }
+
+            if ($curlErrno === 28) {
+                $this->aiLog('ark stream timeout');
+                return array('ok' => false, 'code' => 4002, 'msg' => '请求超时，请稍后再试');
+            }
+            if ($ok === false && $curlErrno !== 0) {
+                $this->aiLog('ark stream curl_fail errno=' . $curlErrno . ' err=' . $curlError . ' http=' . $httpCode);
+                return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
+            }
+            if ($authFailed || $httpCode === 401) {
+                $this->aiLog('ark stream auth_fail http=' . $httpCode);
+                return array('ok' => false, 'code' => 401, 'msg' => '服务鉴权失败，请稍后再试');
+            }
+            if ($upstreamErr !== '') {
+                return array('ok' => false, 'code' => 5000, 'msg' => $upstreamErr);
+            }
+            if ($httpCode >= 400) {
+                $this->aiLog('ark stream http=' . $httpCode . ' head=' . substr($rawHead, 0, 200));
+                return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
+            }
+            if (!$gotAnyDelta) {
+                $this->aiLog('ark stream empty_delta http=' . $httpCode . ' head=' . substr($rawHead, 0, 200));
+                // 流式无正文时降级为非流式再试一次
+                $once = $this->callArkOnce($messages);
+                if ($once['ok'] === true && !empty($once['content'])) {
+                    if (is_callable($onDelta)) {
+                        call_user_func($onDelta, $once['content']);
+                    }
+                    return array('ok' => true, 'code' => 0, 'msg' => 'success');
+                }
+                return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
+            }
+            return array('ok' => true, 'code' => 0, 'msg' => 'success');
         }
-        if ($ok === false && $curlErrno !== 0) {
-            return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
-        }
-        if ($authFailed || $httpCode === 401) {
-            return array('ok' => false, 'code' => 401, 'msg' => '服务鉴权失败，请稍后再试');
-        }
-        if ($upstreamErr !== '') {
-            return array('ok' => false, 'code' => 5000, 'msg' => $upstreamErr);
-        }
-        if ($httpCode >= 400) {
-            return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
-        }
-        return array('ok' => true, 'code' => 0, 'msg' => 'success');
+
+        return $lastFail;
     }
 
     /**
@@ -625,28 +673,54 @@ class Ai extends Controller
             'stream'   => false,
         ), JSON_UNESCAPED_UNICODE);
 
-        $ch = curl_init($this->arkApiUrl);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->arkApiKey,
-        ));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $this->requestTimeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $sslAttempts = array(
+            array('verify' => true, 'cacert' => $this->findCaBundle()),
+            array('verify' => true, 'cacert' => ''),
+            array('verify' => false, 'cacert' => ''),
+        );
 
-        $resp = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlErrno = curl_errno($ch);
-        curl_close($ch);
+        $resp = false;
+        $httpCode = 0;
+        $curlErrno = 0;
+        $curlError = '';
+
+        foreach ($sslAttempts as $ssl) {
+            $ch = curl_init($this->arkApiUrl);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $this->arkApiKey,
+            ));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $this->requestTimeout);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            if ($ssl['verify']) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                if ($ssl['cacert'] !== '' && is_file($ssl['cacert'])) {
+                    curl_setopt($ch, CURLOPT_CAINFO, $ssl['cacert']);
+                }
+            } else {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+            $resp = curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErrno = curl_errno($ch);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            if ($resp !== false && $resp !== '') {
+                break;
+            }
+        }
 
         if ($curlErrno === 28) {
             return array('ok' => false, 'code' => 4002, 'msg' => '请求超时，请稍后再试');
         }
-        if ($resp === false) {
+        if ($resp === false || $resp === '') {
+            $this->aiLog('ark once empty errno=' . $curlErrno . ' err=' . $curlError);
             return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
         }
         if ($httpCode === 401) {
@@ -655,10 +729,12 @@ class Ai extends Controller
 
         $json = json_decode($resp, true);
         if (!is_array($json)) {
+            $this->aiLog('ark once invalid_json head=' . substr((string)$resp, 0, 200));
             return array('ok' => false, 'code' => 5000, 'msg' => '模型服务异常，请稍后再试');
         }
         if (isset($json['error'])) {
             $msg = isset($json['error']['message']) ? (string)$json['error']['message'] : '';
+            $this->aiLog('ark once error=' . mb_substr($msg, 0, 120));
             if (stripos($msg, 'api key') !== false || stripos($msg, 'Unauthorized') !== false
                 || stripos($msg, 'auth') !== false) {
                 return array('ok' => false, 'code' => 401, 'msg' => '服务鉴权失败，请稍后再试');

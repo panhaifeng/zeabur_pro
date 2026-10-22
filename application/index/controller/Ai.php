@@ -474,15 +474,20 @@ class Ai extends Controller
         $url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential'
             . '&appid=' . urlencode($this->wxAppId)
             . '&secret=' . urlencode($this->wxAppSecret);
-        $resp = $this->httpGet($url, 8);
+        $http = $this->httpGetDetail($url, 10);
+        $resp = $http['body'];
         $json = json_decode($resp, true);
         if (!is_array($json) || empty($json['access_token'])) {
             $errcode = is_array($json) && isset($json['errcode']) ? $json['errcode'] : 'na';
             $errmsg = is_array($json) && isset($json['errmsg']) ? $json['errmsg'] : 'empty_or_invalid_json';
-            // 只记错误码/文案，不记 secret
+            // 只记错误码/文案/curl 信息，不记 secret
             $this->aiLog('getWxAccessToken fail errcode=' . $errcode . ' errmsg=' . $errmsg
                 . ' appid_suffix=' . substr($this->wxAppId, -6)
-                . ' resp_len=' . strlen((string)$resp));
+                . ' resp_len=' . strlen((string)$resp)
+                . ' curl_errno=' . $http['errno']
+                . ' curl_err=' . $http['error']
+                . ' http_code=' . $http['http_code']
+                . ' php=' . PHP_VERSION);
             return '';
         }
         $token = $json['access_token'];
@@ -720,30 +725,117 @@ class Ai extends Controller
 
     private function httpGet($url, $timeout = 10)
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        $resp = curl_exec($ch);
-        curl_close($ch);
-        return $resp === false ? '' : $resp;
+        $detail = $this->httpGetDetail($url, $timeout);
+        return $detail['body'];
+    }
+
+    /**
+     * GET 请求详情（兼容 Windows phpStudy 证书问题）
+     * @return array{body:string,errno:int,error:string,http_code:int}
+     */
+    private function httpGetDetail($url, $timeout = 10)
+    {
+        if (!function_exists('curl_init')) {
+            return array('body' => '', 'errno' => -1, 'error' => 'curl_not_enabled', 'http_code' => 0);
+        }
+
+        // 先严格校验证书；失败再带 cacert / 降级，解决本机 phpStudy 常见 SSL 空响应
+        $attempts = array(
+            array('verify' => true, 'cacert' => $this->findCaBundle()),
+            array('verify' => true, 'cacert' => ''),
+            array('verify' => false, 'cacert' => ''),
+        );
+
+        $last = array('body' => '', 'errno' => 0, 'error' => '', 'http_code' => 0);
+        foreach ($attempts as $opt) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            if ($opt['verify']) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                if ($opt['cacert'] !== '' && is_file($opt['cacert'])) {
+                    curl_setopt($ch, CURLOPT_CAINFO, $opt['cacert']);
+                }
+            } else {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+            $resp = curl_exec($ch);
+            $last = array(
+                'body'      => ($resp === false) ? '' : (string)$resp,
+                'errno'     => (int)curl_errno($ch),
+                'error'     => (string)curl_error($ch),
+                'http_code' => (int)curl_getinfo($ch, CURLINFO_HTTP_CODE),
+            );
+            curl_close($ch);
+            if ($last['body'] !== '') {
+                return $last;
+            }
+        }
+        return $last;
+    }
+
+    /**
+     * 查找 CA 证书包（phpStudy 常见路径）
+     */
+    private function findCaBundle()
+    {
+        $candidates = array(
+            'd:/phpstudy_pro/Extensions/php/cacert.pem',
+            'D:/phpstudy_pro/Extensions/php/cacert.pem',
+            ini_get('curl.cainfo'),
+            ini_get('openssl.cafile'),
+        );
+        foreach ($candidates as $path) {
+            if (is_string($path) && $path !== '' && is_file($path)) {
+                return $path;
+            }
+        }
+        return '';
     }
 
     private function httpPostJson($url, array $data, $timeout = 10)
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data, JSON_UNESCAPED_UNICODE));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        $resp = curl_exec($ch);
-        curl_close($ch);
-        return $resp === false ? '' : $resp;
+        if (!function_exists('curl_init')) {
+            return '';
+        }
+        $payload = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $attempts = array(
+            array('verify' => true, 'cacert' => $this->findCaBundle()),
+            array('verify' => true, 'cacert' => ''),
+            array('verify' => false, 'cacert' => ''),
+        );
+        foreach ($attempts as $opt) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+            if ($opt['verify']) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                if ($opt['cacert'] !== '' && is_file($opt['cacert'])) {
+                    curl_setopt($ch, CURLOPT_CAINFO, $opt['cacert']);
+                }
+            } else {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            }
+            $resp = curl_exec($ch);
+            $errno = curl_errno($ch);
+            curl_close($ch);
+            if ($resp !== false && $resp !== '') {
+                return $resp;
+            }
+            if ($errno === 0 && $resp === '') {
+                continue;
+            }
+        }
+        return '';
     }
 }

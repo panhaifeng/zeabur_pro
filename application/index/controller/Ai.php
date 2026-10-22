@@ -112,7 +112,9 @@ class Ai extends Controller
     {
         try {
             $line = date('Y-m-d H:i:s') . ' ' . $msg . PHP_EOL;
-            $dir = runtime_path() . 'log' . DIRECTORY_SEPARATOR;
+            // ThinkPHP 5.1 使用常量 RUNTIME_PATH（无 runtime_path() 助手函数）
+            $dir = (defined('RUNTIME_PATH') ? RUNTIME_PATH : (dirname(dirname(dirname(__DIR__))) . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR))
+                . 'log' . DIRECTORY_SEPARATOR;
             if (!is_dir($dir)) {
                 @mkdir($dir, 0755, true);
             }

@@ -65,30 +65,30 @@
         <div>{$list|raw}</div>
     </div>
 </div>
+{/block}
+{block name="script"}
 <script>
-$(function () {
-    $('.btn-mark').on('click', function () {
-        var id = $(this).data('id');
-        var status = $(this).data('status');
-        $.post("{:url('admin/suggestion/markRead')}", {id: id, status: status}, function (res) {
-            if (res.code == 1) {
-                location.reload();
-            } else {
-                alert(res.msg || '操作失败');
-            }
-        }, 'json');
-    });
-    $('.btn-del').on('click', function () {
-        if (!confirm('确定删除这条建议吗？')) return;
-        var id = $(this).data('id');
-        $.post("{:url('admin/suggestion/delete')}", {id: id}, function (res) {
-            if (res.code == 1) {
-                location.reload();
-            } else {
-                alert(res.msg || '删除失败');
-            }
-        }, 'json');
-    });
+$('.btn-mark').on('click', function () {
+    var id = $(this).data('id');
+    var status = $(this).data('status');
+    $.post("{:url('admin/suggestion/markRead')}", {id: id, status: status}, function (res) {
+        if (res.code == 1) {
+            location.reload();
+        } else {
+            alert(res.msg || '操作失败');
+        }
+    }, 'json');
+});
+$('.btn-del').on('click', function () {
+    if (!confirm('确定删除这条建议吗？')) return;
+    var id = $(this).data('id');
+    $.post("{:url('admin/suggestion/delete')}", {id: id}, function (res) {
+        if (res.code == 1) {
+            location.reload();
+        } else {
+            alert(res.msg || '删除失败');
+        }
+    }, 'json');
 });
 </script>
 {/block}

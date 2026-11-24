@@ -16,6 +16,8 @@ Route::get('api/word/lib-list', 'api/word/libList');
 Route::post('api/game/start', 'api/game/start');
 Route::post('api/game/save-round', 'api/game/saveRound');
 
+Route::post('api/suggestion/submit', 'api/suggestion/submit');
+
 // AI 对话（流式 / 普通）
 Route::post('index/ai/streamChat', 'index/ai/streamChat');
 Route::post('index/ai/chat', 'index/ai/chat');

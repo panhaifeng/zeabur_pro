@@ -1,0 +1,94 @@
+{extend name="public/layout" /}
+{block name="content"}
+<div class="panel panel-default">
+    <div class="panel-heading clearfix">
+        <span class="pull-left">意见反馈</span>
+        <span class="pull-right text-muted">未读 {$unread|default=0} 条</span>
+    </div>
+    <div class="panel-body">
+        <form class="form-inline" method="get" action="{:url('admin/suggestion/index')}" style="margin-bottom:15px;">
+            <input type="text" class="form-control" name="keyword" value="{$keyword}" placeholder="内容 / 联系方式 / 昵称">
+            <select class="form-control" name="status">
+                <option value="">全部状态</option>
+                <option value="0" {if $status === '0' || $status === 0}selected{/if}>未读</option>
+                <option value="1" {if $status === '1' || $status === 1}selected{/if}>已读</option>
+            </select>
+            <button class="btn btn-default" type="submit">搜索</button>
+        </form>
+        <table class="table table-bordered table-hover">
+            <thead>
+            <tr>
+                <th width="60">ID</th>
+                <th width="120">用户</th>
+                <th width="80">类型</th>
+                <th>建议内容</th>
+                <th width="140">联系方式</th>
+                <th width="70">状态</th>
+                <th width="160">提交时间</th>
+                <th width="160">操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            {volist name="list" id="vo"}
+            <tr {if $vo.status == 0}style="background:#fffbe6;"{/if}>
+                <td>{$vo.id}</td>
+                <td>{$vo.nickname|default='未设置'}</td>
+                <td>
+                    {if $vo.openid}
+                    <span class="label label-success">微信</span>
+                    {else /}
+                    <span class="label label-default">游客</span>
+                    {/if}
+                </td>
+                <td style="white-space:pre-wrap;word-break:break-all;">{$vo.content}</td>
+                <td>{$vo.contact|default='-'}</td>
+                <td>
+                    {if $vo.status == 0}
+                    <span class="label label-warning">未读</span>
+                    {else /}
+                    <span class="label label-default">已读</span>
+                    {/if}
+                </td>
+                <td>{$vo.create_time}</td>
+                <td>
+                    {if $vo.status == 0}
+                    <a class="btn btn-xs btn-primary btn-mark" href="javascript:;" data-id="{$vo.id}" data-status="1">标为已读</a>
+                    {else /}
+                    <a class="btn btn-xs btn-default btn-mark" href="javascript:;" data-id="{$vo.id}" data-status="0">标为未读</a>
+                    {/if}
+                    <a class="btn btn-xs btn-danger btn-del" href="javascript:;" data-id="{$vo.id}">删除</a>
+                </td>
+            </tr>
+            {/volist}
+            </tbody>
+        </table>
+        <div>{$list|raw}</div>
+    </div>
+</div>
+<script>
+$(function () {
+    $('.btn-mark').on('click', function () {
+        var id = $(this).data('id');
+        var status = $(this).data('status');
+        $.post("{:url('admin/suggestion/markRead')}", {id: id, status: status}, function (res) {
+            if (res.code == 1) {
+                location.reload();
+            } else {
+                alert(res.msg || '操作失败');
+            }
+        }, 'json');
+    });
+    $('.btn-del').on('click', function () {
+        if (!confirm('确定删除这条建议吗？')) return;
+        var id = $(this).data('id');
+        $.post("{:url('admin/suggestion/delete')}", {id: id}, function (res) {
+            if (res.code == 1) {
+                location.reload();
+            } else {
+                alert(res.msg || '删除失败');
+            }
+        }, 'json');
+    });
+});
+</script>
+{/block}

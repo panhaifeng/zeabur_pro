@@ -108,14 +108,25 @@ class Base extends Controller
         if ($user) {
             return $user;
         }
-        $id = Db::name('user')->insertGetId(array(
-            'openid'       => null,
-            'anonymous_id' => $anonymousId,
-            'nickname'     => '游客',
-            'avatar'       => '',
-            'create_time'  => date('Y-m-d H:i:s'),
-        ));
-        return Db::name('user')->where('id', $id)->find();
+
+        // MySQL 并发下可能同时 insert 同一 anonymous_id，靠唯一索引兜底后回查
+        try {
+            $id = Db::name('user')->insertGetId(array(
+                'openid'       => null,
+                'anonymous_id' => $anonymousId,
+                'nickname'     => '游客',
+                'avatar'       => '',
+                'create_time'  => date('Y-m-d H:i:s'),
+            ));
+            return Db::name('user')->where('id', $id)->find();
+        } catch (\Exception $e) {
+            $user = Db::name('user')->where('anonymous_id', $anonymousId)->find();
+            if ($user) {
+                return $user;
+            }
+            // 极端情况再查一次 openid 为空且刚插入的冲突行
+            throw $e;
+        }
     }
 
     protected function formatUser($user)
